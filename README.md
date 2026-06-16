@@ -7,6 +7,6 @@ OS Anki flashcards made using the codehelp OS notes pdf.
     Type: Basic
     Deck: Operating Systems (auto-created)
     Fields separated by: Tab
-    Allow HTML in fields: ✅ checked
+    Allow HTML in fields: checked
 4. Hit Import
 
