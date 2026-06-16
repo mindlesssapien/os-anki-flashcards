@@ -1,0 +1,251 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans)}
+.app{padding:1rem 0}
+.header{display:flex;align-items:center;gap:12px;margin-bottom:1.5rem;flex-wrap:wrap}
+.section-select{flex:1;min-width:180px}
+.progress{font-size:13px;color:var(--color-text-secondary);white-space:nowrap}
+.card-wrap{perspective:1000px;width:100%;height:260px;cursor:pointer;margin-bottom:1rem}
+.card-inner{position:relative;width:100%;height:100%;transition:transform 0.45s cubic-bezier(.4,.2,.2,1);transform-style:preserve-3d}
+.card-wrap.flipped .card-inner{transform:rotateY(180deg)}
+.face{position:absolute;width:100%;height:100%;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:var(--border-radius-lg);border:0.5px solid var(--color-border-tertiary);background:var(--color-background-primary);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1.5rem;text-align:center}
+.back{transform:rotateY(180deg)}
+.face-label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--color-text-tertiary);margin-bottom:.75rem}
+.face-text{font-size:16px;line-height:1.6;color:var(--color-text-primary)}
+.face-text b{font-weight:500}
+.section-badge{font-size:11px;padding:3px 10px;border-radius:var(--border-radius-md);margin-bottom:.75rem}
+.controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.controls button{flex:1;min-width:80px}
+.stat-row{display:flex;gap:8px;margin-bottom:1rem}
+.stat{flex:1;background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:.6rem 1rem;text-align:center}
+.stat-n{font-size:20px;font-weight:500;color:var(--color-text-primary)}
+.stat-l{font-size:12px;color:var(--color-text-secondary);margin-top:2px}
+.hint{font-size:12px;color:var(--color-text-tertiary);text-align:center;margin-top:.5rem}
+.progress-bar{height:4px;background:var(--color-background-secondary);border-radius:2px;margin-bottom:1rem;overflow:hidden}
+.progress-fill{height:100%;background:#1D9E75;border-radius:2px;transition:width .3s}
+select{width:100%}
+</style>
+
+<div class="app">
+<h2 class="sr-only" style="position:absolute;left:-9999px">OS Anki Flashcards interactive study tool</h2>
+
+<div class="header">
+  <select class="section-select" id="secSel" onchange="changeSection()">
+    <option value="0">All sections</option>
+    <option value="1">Unit 1 – Introduction & Types of OS</option>
+    <option value="2">Unit 2 – Processes & Scheduling</option>
+    <option value="3">Unit 3 – Synchronization & Deadlocks</option>
+    <option value="4">Unit 4 – Memory Management</option>
+  </select>
+  <span class="progress" id="prog">Card 1 of 80</span>
+</div>
+
+<div class="stat-row">
+  <div class="stat"><div class="stat-n" id="sKnow">0</div><div class="stat-l">Know it</div></div>
+  <div class="stat"><div class="stat-n" id="sLearn">0</div><div class="stat-l">Learning</div></div>
+  <div class="stat"><div class="stat-n" id="sLeft" >80</div><div class="stat-l">Remaining</div></div>
+</div>
+
+<div class="progress-bar"><div class="progress-fill" id="pBar" style="width:0%"></div></div>
+
+<div class="card-wrap" id="cardWrap" onclick="flip()">
+  <div class="card-inner" id="cardInner">
+    <div class="face front">
+      <div class="face-label">Question</div>
+      <div class="section-badge" id="badgeF" style="background:var(--color-background-info);color:var(--color-text-info)"></div>
+      <div class="face-text" id="qText"></div>
+    </div>
+    <div class="face back">
+      <div class="face-label">Answer</div>
+      <div class="face-text" id="aText"></div>
+    </div>
+  </div>
+</div>
+
+<div class="hint" id="hintTxt">Tap card to reveal answer</div>
+
+<div class="controls" id="ctrlBtns" style="display:none;margin-top:.75rem">
+  <button onclick="mark('know')" style="border-color:#1D9E75;color:#1D9E75">✓ Know it</button>
+  <button onclick="mark('learn')">✗ Still learning</button>
+</div>
+<div class="controls" style="margin-top:.75rem">
+  <button onclick="prev()">← Prev</button>
+  <button onclick="shuffle()">⟳ Shuffle</button>
+  <button onclick="next()">Next →</button>
+</div>
+</div>
+
+<script>
+const SECTIONS={
+  1:"Intro & Types",2:"Processes",3:"Sync & Deadlock",4:"Memory"
+};
+const CARDS=[
+  {s:1,q:"What is an Operating System?",a:"Software that manages all hardware and software resources, providing an environment for program execution by hiding hardware complexity and acting as a resource manager."},
+  {s:1,q:"What are the two key roles of an OS?",a:"<b>Arbitration</b> (resource management: memory, device, file, security, process) and <b>Abstraction</b> (hiding underlying hardware complexity)."},
+  {s:1,q:"What problems arise if there is no OS?",a:"1. Apps become bulky & complex (hardware code embedded in app). 2. Single app can exploit all resources. 3. No memory protection."},
+  {s:1,q:"What are the three goals of an OS?",a:"1. Maximum CPU utilization. 2. Less process starvation. 3. Higher priority job execution."},
+  {s:1,q:"What is a Single Process OS?",a:"Only one process executes at a time from the ready queue. Oldest type. Example: MS-DOS (1981)."},
+  {s:1,q:"What is a Batch Processing OS?",a:"Operator groups similar jobs into batches and submits them. All jobs in a batch execute together. Drawbacks: no priorities, starvation, CPU idle on I/O."},
+  {s:1,q:"What is Multiprogramming OS?",a:"Multiple jobs kept in memory so CPU always has one to execute when another is doing I/O. Single CPU, context switching on wait state. Reduces CPU idle time."},
+  {s:1,q:"How does Multitasking differ from Multiprogramming?",a:"Multitasking is a logical extension of multiprogramming. It uses time sharing AND context switching to run multiple tasks simultaneously, further reducing CPU idle time and increasing responsiveness."},
+  {s:1,q:"What is a Multi-processing OS?",a:"More than one CPU in a single computer. Benefits: increased reliability, better throughput, lesser process starvation. Example: Windows NT."},
+  {s:1,q:"What is a Distributed OS?",a:"Manages multiple loosely connected autonomous nodes (≥1 CPUs, memories, GPUs). Collection of independent, networked, communicating, physically separate computational nodes. Example: LOCUS."},
+  {s:1,q:"What is a Real-Time OS (RTOS)?",a:"Error-free computations within tight time boundaries. Used in Air Traffic Control, ROBOTS. Example: ATCS."},
+  {s:1,q:"What is a Program?",a:"A compiled executable file containing instructions, stored on disk. Ready to be executed but not yet running."},
+  {s:1,q:"What is a Process?",a:"A program under execution. Resides in the computer's primary memory (RAM)."},
+  {s:1,q:"What is a Thread?",a:"A single sequence stream within a process. A lightweight, independent path of execution used to achieve parallelism within a process."},
+  {s:1,q:"Key difference: Multitasking vs Multi-threading (memory)?",a:"<b>Multitasking</b>: OS allocates separate memory to each process (isolation exists). <b>Multi-threading</b>: Threads of the same process share memory and resources (no isolation)."},
+  {s:1,q:"Thread context switching vs Process context switching — what's the key difference?",a:"Thread: saves thread state, switches to another thread of <b>same process</b>. No memory address space switch → fast, cache preserved. Process: switches address space → slow, cache flushed."},
+  {s:1,q:"What is a Kernel?",a:"The core part of the OS that interacts directly with hardware and performs the most crucial tasks. It is the very first part of the OS to load at startup."},
+  {s:1,q:"What is User Space?",a:"Where application software runs. Apps don't have privileged access to hardware. Interacts with the kernel via GUI or CLI."},
+  {s:1,q:"What is a Shell?",a:"A command interpreter — the part of the OS that receives commands from users and gets them executed."},
+  {s:1,q:"List the four functions of the Kernel.",a:"1. Process management (scheduling, create/delete, sync). 2. Memory management (allocate/deallocate, track usage). 3. File management (create/delete files & dirs). 4. I/O management (buffering, caching, spooling)."},
+  {s:1,q:"Monolithic Kernel — pros and cons?",a:"<b>Pros</b>: High performance (fast communication, less mode overhead). <b>Cons</b>: Bulky, high memory, less reliable (one crash = whole kernel down). Ex: Linux, Unix, MS-DOS."},
+  {s:1,q:"Micro Kernel — pros and cons?",a:"<b>Pros</b>: Smaller, more reliable, more stable. <b>Cons</b>: Slow performance (overhead switching between user/kernel mode). Ex: L4 Linux, Symbian, MINIX."},
+  {s:1,q:"What does a Hybrid Kernel combine?",a:"Advantages of both monolithic (speed & design) and micro (modularity & stability). File mgmt in user space, rest in kernel. Ex: macOS, Windows NT/7/10."},
+  {s:1,q:"What is IPC and why is it needed?",a:"Inter-Process Communication. Needed because processes run independently with separate memory (protection), but sometimes must communicate. Done via <b>shared memory</b> or <b>message passing</b>."},
+  {s:1,q:"What is a System Call?",a:"A mechanism by which a user program requests a kernel service it doesn't have permission to perform directly. The only way a process can go from user mode to kernel mode."},
+  {s:1,q:"How does user mode transition to kernel mode?",a:"Via <b>software interrupts</b>. The flow: User App → Glibc → System Call Interface (SCI) → Kernel Mode."},
+  {s:1,q:"Name the 5 types of System Calls.",a:"1. Process Control (fork, exec, exit). 2. File Management (open, read, write). 3. Device Management (ioctl, read). 4. Information Maintenance (getpid, alarm). 5. Communication Management (pipe, shmget)."},
+  {s:1,q:"What happens when you turn on a computer?",a:"CPU → loads BIOS (ROM chip) → POST (Power-on Self-Test) → BIOS hands off to bootloader via MBR → Bootloader loads Kernel → then User Space."},
+  {s:1,q:"What is POST?",a:"Power On Self-Test. BIOS tests and initializes system hardware. If something is wrong (e.g., missing RAM), an error is thrown and the boot process stops."},
+  {s:1,q:"What is GRUB?",a:"GRand Unified Bootloader — the bootloader used by most Linux systems. Its job is to boot the rest of the OS (kernel then user space)."},
+  {s:1,q:"32-bit vs 64-bit OS — addressable memory?",a:"32-bit: 2^32 addresses = 4 GB physical memory. 64-bit: 2^64 addresses = ~17.2 billion GB. 64-bit CPUs can run both 32-bit and 64-bit OS."},
+  {s:1,q:"What are the memory types in a computer system (fastest to slowest)?",a:"Register → Cache → Main Memory (RAM) → Secondary Memory (disk). Primary memory is volatile; secondary is non-volatile. Registers are most expensive."},
+
+  {s:2,q:"What is a PCB (Process Control Block)?",a:"A data structure storing all attributes of a process: Process ID, Program Counter, Process State, Priority, Registers, List of open files, List of open devices."},
+  {s:2,q:"What are the 5 process states?",a:"<b>New</b>: being created. <b>Ready</b>: in memory, waiting for CPU. <b>Running</b>: instructions executing. <b>Waiting</b>: waiting for I/O. <b>Terminated</b>: finished, PCB removed."},
+  {s:2,q:"What are the three process queues?",a:"<b>Job Queue</b>: new state, secondary memory → LTS loads to memory. <b>Ready Queue</b>: ready state, main memory → STS dispatches to CPU. <b>Waiting Queue</b>: waiting for I/O."},
+  {s:2,q:"What is the Long-Term Scheduler (LTS)?",a:"Picks processes from the job pool (secondary memory) and loads them into main memory for execution. Controls the <b>degree of multiprogramming</b>."},
+  {s:2,q:"What is the Short-Term Scheduler (STS) / CPU Scheduler?",a:"Picks a process from the ready queue and dispatches it to the CPU. Called when CPU becomes idle."},
+  {s:2,q:"What is the Dispatcher?",a:"The OS module that gives control of the CPU to the process selected by the STS. Different from the scheduler."},
+  {s:2,q:"What is Swapping?",a:"Medium-Term Scheduler (MTS) removes processes from memory (swap-out) to reduce multiprogramming degree, then reintroduces them (swap-in) later, continuing from where left off."},
+  {s:2,q:"What is Context Switching?",a:"Saving the state (context) of the current running process in its PCB, then loading the saved context of a new process. It is pure overhead — no useful work is done."},
+  {s:2,q:"What is an Orphan Process?",a:"A process whose parent has terminated but it is still running. Orphan processes are adopted by the <b>init</b> process (first process of the OS)."},
+  {s:2,q:"What is a Zombie / Defunct Process?",a:"A process that has finished execution but still has an entry in the process table, because the parent hasn't read its exit status yet. Eliminated by <b>reaping</b> via the wait() system call."},
+  {s:2,q:"What is the Architecture of a Process in memory?",a:"<b>Text</b>: compiled code. <b>Data</b>: global & static data. <b>Heap</b>: dynamically allocated variables. <b>Stack</b>: local variables, function arguments, return values."},
+  {s:2,q:"What is Non-Preemptive Scheduling?",a:"Once CPU is allocated, the process keeps it until it terminates or switches to wait state. Can cause starvation and low CPU utilization."},
+  {s:2,q:"What is Preemptive Scheduling?",a:"CPU can be taken away from a process after time quantum expires or when it switches to wait state. Less starvation, higher CPU utilization."},
+  {s:2,q:"Define: Turnaround Time (TAT)",a:"Time from when a process first enters the ready state until it terminates. <b>TAT = CT − AT</b>. (CT = Completion Time, AT = Arrival Time)"},
+  {s:2,q:"Define: Wait Time (WT) and Response Time",a:"<b>WT = TAT − BT</b> (time spent waiting for CPU). <b>Response Time</b> = time from entering ready queue to first getting CPU."},
+  {s:2,q:"What is FCFS scheduling and its main problem?",a:"First Come First Served — process arriving first gets CPU first. Non-preemptive. Main problem: <b>Convoy Effect</b> — one long BT process blocks many short ones, causing poor resource use."},
+  {s:2,q:"What is SJF (Shortest Job First)?",a:"Non-preemptive. Process with least Burst Time dispatched first. Criteria: AT + BT. Drawback: starvation; correct BT estimation is impossible in practice."},
+  {s:2,q:"What is Preemptive SJF (PSJF)?",a:"Current process is preempted if a new process arrives with shorter remaining BT. Less starvation, no convoy effect. Gives minimum average WT for a given set of processes."},
+  {s:2,q:"What is Priority Scheduling and its problem?",a:"Priority assigned at creation; highest priority gets CPU. Problem: <b>Starvation</b> — low priority processes may never execute. Solution: <b>Aging</b> (gradually increase priority of waiting processes)."},
+  {s:2,q:"What is Round Robin (RR) scheduling?",a:"Like FCFS but preemptive. Uses a Time Quantum (TQ). No convoy effect, very low starvation. Designed for time-sharing systems. Smaller TQ → more context switches (overhead)."},
+  {s:2,q:"What is MLQ (Multi-Level Queue)?",a:"Ready queue split into multiple fixed queues by process type (System > Interactive > Batch). Processes permanently assigned to one queue. Convoy effect and starvation present."},
+  {s:2,q:"What is MLFQ and how does it improve on MLQ?",a:"Multi-Level Feedback Queue. Processes can <b>move between queues</b> based on CPU usage (used too much → lower queue; waited too long → higher queue). Less starvation, flexible."},
+  {s:2,q:"Compare scheduling algorithms on Convoy Effect.",a:"No convoy: PSJF, RR. Yes convoy: FCFS, SJF, Priority, P-Priority, MLQ, MLFQ."},
+  {s:2,q:"What is Concurrency?",a:"Execution of multiple instruction sequences at the same time. Happens when several process threads run in parallel in the OS."},
+  {s:2,q:"Will a single CPU system gain from multi-threading?",a:"No. Two threads still have to context switch on that single CPU — there is no real gain."},
+  {s:2,q:"What are the benefits of Multi-threading?",a:"1. Responsiveness. 2. Resource sharing (efficient). 3. Economy (cheaper to create/context-switch threads than processes). 4. Better utilization of multiprocessor architectures."},
+
+  {s:3,q:"What is a Critical Section (CS)?",a:"A segment of code where processes/threads access shared resources (variables, files) and perform write operations. Since execution is concurrent, any process can be interrupted mid-execution."},
+  {s:3,q:"What is a Race Condition?",a:"When two or more threads access shared data and try to change it simultaneously. The result depends on the scheduling order — threads are 'racing' to access/change the data."},
+  {s:3,q:"What are the three solutions to Race Condition?",a:"1. Atomic operations (execute critical section in one CPU cycle). 2. Mutual Exclusion using locks (Mutex). 3. Semaphores."},
+  {s:3,q:"What is Peterson's Solution?",a:"A software solution to avoid race condition using a flag and a turn variable. Only works for <b>2 processes/threads</b>."},
+  {s:3,q:"What is a Mutex / Lock?",a:"Allows only one thread to access the critical section at a time. Disadvantages: Contention (busy waiting, risk of infinite wait if lock-holder dies), Deadlocks, debugging difficulty, high-priority starvation."},
+  {s:3,q:"What is a Conditional Variable?",a:"A synchronization primitive that lets a thread wait until a certain condition occurs. Works with a lock. Avoids busy waiting — thread releases lock while waiting and reacquires it on wakeup."},
+  {s:3,q:"What is a Semaphore?",a:"An integer equal to the number of available resources. Multiple threads can execute CS concurrently. Binary semaphore (0 or 1) = mutex lock. Counting semaphore = finite instances."},
+  {s:3,q:"Binary vs Counting Semaphore?",a:"<b>Binary</b>: value 0 or 1, equivalent to a mutex lock. <b>Counting</b>: unrestricted range, controls access to a resource with finite instances (e.g., 3 printers)."},
+  {s:3,q:"How does Semaphore avoid busy waiting?",a:"When wait() finds semaphore ≤ 0, instead of spinning, the process blocks itself and is placed in a waiting queue. It is restarted via wakeup() when another process calls signal()."},
+  {s:3,q:"What is the Dining Philosophers Problem?",a:"5 philosophers share 5 forks. Each needs 2 adjacent forks to eat. Modeled using semaphores (fork[5]{1}). Naive solution can cause deadlock if all pick up left fork simultaneously."},
+  {s:3,q:"Three deadlock-free solutions to Dining Philosophers?",a:"1. Allow at most 4 philosophers sitting simultaneously. 2. Pick up both forks atomically in a critical section. 3. Odd-Even rule: odd picks left then right; even picks right then left."},
+  {s:3,q:"What is a Deadlock?",a:"A state where two or more processes wait forever for resources held by each other. Processes never finish; system resources are tied up, preventing other jobs from starting."},
+  {s:3,q:"What are the 4 necessary conditions for Deadlock (Coffman's conditions)?",a:"<b>1. Mutual Exclusion</b>: only 1 process uses resource at a time. <b>2. Hold & Wait</b>: holds one resource while waiting for more. <b>3. No Preemption</b>: resources released only voluntarily. <b>4. Circular Wait</b>: circular chain of waiting processes."},
+  {s:3,q:"What are the three methods for handling Deadlocks?",a:"1. <b>Prevention/Avoidance</b>: ensure system never enters deadlocked state. 2. <b>Detection & Recovery</b>: allow deadlock, detect and recover. 3. <b>Ignorance</b>: pretend deadlocks don't occur (Ostrich algorithm)."},
+  {s:3,q:"How to prevent Circular Wait?",a:"Impose a strict ordering on resource types. All processes must request resources in the same order. Whichever process locks R1 first will get R2 — no cycle can form."},
+  {s:3,q:"What is Deadlock Avoidance and the Banker's Algorithm?",a:"Kernel is given advance info on max resource needs. Before granting a request, system checks if resulting state is <b>safe</b>. Banker's Algorithm: allocate only if system remains in a safe state."},
+  {s:3,q:"What is a Safe State?",a:"A state where the system can allocate resources to each process (up to its max) in some order and still avoid deadlock. A safe sequence must exist."},
+  {s:3,q:"What is Deadlock Detection for single vs multiple resource instances?",a:"Single instance: <b>Wait-For Graph</b> — deadlock exists iff there is a cycle. Multiple instances: <b>Banker's Algorithm</b> adapted for detection."},
+  {s:3,q:"What are the two Deadlock Recovery methods?",a:"1. <b>Process termination</b>: abort all DL processes at once, or abort one at a time until cycle breaks. 2. <b>Resource preemption</b>: successively preempt resources from processes until DL cycle is broken."},
+
+  {s:4,q:"What is a Logical (Virtual) Address?",a:"Generated by the CPU. Address of an instruction/data used by a process. Range: 0 to max. Does not exist physically. User accesses physical memory indirectly through it."},
+  {s:4,q:"What is a Physical Address?",a:"Actual location in main memory. Computed by the <b>MMU</b>. User can never access it directly. Range: (R+0) to (R+max) for base value R."},
+  {s:4,q:"What is the MMU?",a:"Memory Management Unit — a hardware device that performs runtime mapping (translation) from logical/virtual address to physical address."},
+  {s:4,q:"What is Internal Fragmentation?",a:"Wasted space inside a partition when a process is smaller than the partition size. Occurs in <b>Fixed Partitioning</b>."},
+  {s:4,q:"What is External Fragmentation?",a:"Total free space exists but is scattered in non-contiguous chunks, so a large process can't be loaded even though enough total space is available. Occurs in <b>Dynamic Partitioning</b>."},
+  {s:4,q:"Fixed Partitioning vs Dynamic Partitioning?",a:"<b>Fixed</b>: equal/unequal sized partitions, internal + external fragmentation, limited multiprogramming. <b>Dynamic</b>: partition = process size, no internal fragmentation, but external fragmentation remains."},
+  {s:4,q:"What is Compaction / Defragmentation?",a:"Moving all free partitions together and all loaded partitions together to eliminate external fragmentation. System efficiency decreases during compaction."},
+  {s:4,q:"What are the four free-space allocation algorithms?",a:"<b>First Fit</b>: first big enough hole (fast). <b>Next Fit</b>: like first fit but starts from last allocated. <b>Best Fit</b>: smallest sufficient hole (less internal frag, may cause many small holes). <b>Worst Fit</b>: largest hole (leaves larger holes)."},
+  {s:4,q:"What is Paging?",a:"Non-contiguous memory allocation. Physical memory divided into fixed-size <b>Frames</b>; logical memory into same-size <b>Pages</b>. A Page Table maps pages to frames. Eliminates external fragmentation."},
+  {s:4,q:"What is a Page Table?",a:"Data structure that stores which page maps to which frame. Contains the base address of each page in physical memory. Stored in main memory; base address kept in PCB and PTBR."},
+  {s:4,q:"What is TLB (Translation Look-aside Buffer)?",a:"A hardware cache (high-speed memory) that speeds up paging by caching recent page-to-frame mappings. TLB hit: direct physical address. TLB miss: must consult page table (slow)."},
+  {s:4,q:"What is an ASID in TLB?",a:"Address Space Identifier — stored in each TLB entry. Uniquely identifies each process and allows TLB to hold entries for multiple processes simultaneously, providing address space protection."},
+  {s:4,q:"What is Segmentation?",a:"Non-contiguous memory allocation that supports the <b>user view</b> of memory. Process divided into variable-size segments (e.g., main, library). Each segment has a segment number and offset {s, d}."},
+  {s:4,q:"Paging vs Segmentation — key difference?",a:"<b>Paging</b>: OS view, fixed size, may split a function across pages, eliminates external fragmentation. <b>Segmentation</b>: user view, variable size, keeps functions intact, has external fragmentation."},
+  {s:4,q:"What is Virtual Memory?",a:"A technique that allows execution of processes not completely in physical memory. Provides illusion of a very large main memory by treating part of secondary memory (swap space) as main memory."},
+  {s:4,q:"What is Demand Paging?",a:"Popular virtual memory method. Least-used pages stored in secondary memory. A page is brought into memory only on demand (when accessed) or when a <b>page fault</b> occurs. Uses a Lazy Swapper / Pager."},
+  {s:4,q:"What is a Page Fault?",a:"Occurs when a process accesses a page not in physical memory (valid-invalid bit = 0). Causes a trap to OS. OS finds free frame, reads page from disk, updates page table, restarts instruction."},
+  {s:4,q:"What is the valid-invalid bit in the page table?",a:"<b>1</b>: page is legal and in memory. <b>0</b>: page is either not valid (not in logical address space) or valid but currently on disk."},
+  {s:4,q:"FIFO Page Replacement — what is Belady's Anomaly?",a:"In FIFO, increasing the number of frames can <b>increase</b> page faults — counterintuitive. LRU and Optimal do not suffer from Belady's anomaly."},
+  {s:4,q:"What is Optimal Page Replacement?",a:"Replace the page that will not be used for the <b>longest time in the future</b>. Lowest page fault rate of any algorithm. Impossible to implement in practice (requires future knowledge)."},
+  {s:4,q:"What is LRU Page Replacement?",a:"Replace the page <b>Least Recently Used</b> in the past (approximation of future). Implemented via Counters or a Stack (doubly linked list). No Belady's anomaly."},
+  {s:4,q:"What is Thrashing?",a:"When a process doesn't have enough frames, it continuously page-faults and replaces pages it immediately needs again. System spends more time servicing page faults than executing processes."},
+  {s:4,q:"Two techniques to handle Thrashing?",a:"1. <b>Working Set Model</b>: allocate enough frames to cover a process's current locality. 2. <b>Page Fault Frequency</b>: control page-fault rate by setting upper/lower bounds and adjusting frame allocation."},
+];
+
+let deck=[...CARDS];
+let idx=0,flipped=false;
+let know=new Set(),learn=new Set();
+let currentSec=0;
+
+function getDeck(){
+  return currentSec===0?CARDS:CARDS.filter(c=>c.s===currentSec);
+}
+
+function changeSection(){
+  currentSec=parseInt(document.getElementById('secSel').value);
+  deck=[...getDeck()];
+  idx=0;know=new Set();learn=new Set();
+  render();
+}
+
+function render(){
+  const d=deck;
+  if(d.length===0){
+    document.getElementById('qText').textContent='No cards in this section.';
+    document.getElementById('aText').textContent='';
+    return;
+  }
+  const c=d[idx];
+  document.getElementById('qText').innerHTML=c.q;
+  document.getElementById('aText').innerHTML=c.a;
+  document.getElementById('badgeF').textContent=SECTIONS[c.s]||'';
+  document.getElementById('prog').textContent=`Card ${idx+1} of ${d.length}`;
+  document.getElementById('sKnow').textContent=know.size;
+  document.getElementById('sLearn').textContent=learn.size;
+  const rem=d.length-know.size-learn.size;
+  document.getElementById('sLeft').textContent=rem;
+  document.getElementById('pBar').style.width=Math.round((know.size/d.length)*100)+'%';
+
+  const w=document.getElementById('cardWrap');
+  w.classList.remove('flipped');
+  flipped=false;
+  document.getElementById('ctrlBtns').style.display='none';
+  document.getElementById('hintTxt').textContent='Tap card to reveal answer';
+}
+
+function flip(){
+  const w=document.getElementById('cardWrap');
+  flipped=!flipped;
+  w.classList.toggle('flipped',flipped);
+  document.getElementById('ctrlBtns').style.display=flipped?'flex':'none';
+  document.getElementById('hintTxt').textContent=flipped?'How well did you know it?':'Tap card to reveal answer';
+}
+
+function mark(t){
+  const ci=deck[idx];
+  const key=ci.s+':'+ci.q;
+  if(t==='know'){know.add(key);learn.delete(key);}
+  else{learn.add(key);know.delete(key);}
+  next();
+}
+
+function next(){if(deck.length===0)return;idx=(idx+1)%deck.length;render();}
+function prev(){if(deck.length===0)return;idx=(idx-1+deck.length)%deck.length;render();}
+function shuffle(){deck=deck.sort(()=>Math.random()-.5);idx=0;render();}
+
+render();
+</script>
